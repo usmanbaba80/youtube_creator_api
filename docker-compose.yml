@@ -1,0 +1,34 @@
+# Isolated stack — will not recreate/replace other projects' containers.
+# Use a unique host port (default 18080) so it does not collide with other apps.
+
+name: youtube-creator-api
+
+services:
+  api:
+    build: .
+    container_name: youtube-creator-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Listen inside the container
+      HTTP_ADDR: ":8080"
+    ports:
+      # HOST:CONTAINER — change left side if 18080 is taken
+      - "18080:8080"
+    extra_hosts:
+      # Lets the container reach Postgres (or other services) on the Contabo host
+      - "host.docker.internal:host-gateway"
+    networks:
+      - youtube_creator_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  youtube_creator_net:
+    name: youtube_creator_net
+    driver: bridge
