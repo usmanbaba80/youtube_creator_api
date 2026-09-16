@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -323,6 +324,7 @@ LIMIT 1`, creatorID, categoryID).Scan(
 			&row.ChannelURL, &row.Handle, &row.YouTubeChannelID, &row.CreatedAt,
 		)
 		if errors.Is(err, pgx.ErrNoRows) {
+			log.Printf("creator not found: creator_id=%d category_id=%d path=%s", creatorID, categoryID, r.URL.Path)
 			return nil, &resolveError{http.StatusNotFound, "not_found", "creator not found"}
 		}
 		if err != nil {
@@ -336,6 +338,7 @@ LIMIT 1`, creatorID, categoryID).Scan(
 		return nil, &resolveError{http.StatusInternalServerError, "query_failed", "failed to load creator"}
 	}
 	if count == 0 {
+		log.Printf("creator not found: creator_id=%d path=%s", creatorID, r.URL.Path)
 		return nil, &resolveError{http.StatusNotFound, "not_found", "creator not found"}
 	}
 	if count > 1 {

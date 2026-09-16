@@ -37,12 +37,14 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
+	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 	r.Use(limiter.Middleware)
 	r.Use(chimw.Timeout(cfg.WriteTimeout))
 
+	log.Printf("youtube-creator-api starting (ready_only=%v)", cfg.ReadyOnly)
 	// Unauthenticated liveness (no DB) for probes.
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
