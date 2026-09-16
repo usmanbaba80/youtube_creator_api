@@ -29,8 +29,8 @@ If the same id exists in multiple categories, pass `?category_id=1`.
 
 By default (`READY_ONLY=true`) APIs only return content that is ready for clients:
 
-- Videos / shorts: `transfer_status = done` and `bunny_url` present
-- Playlists: `metadata_status = done`; items only when playable Bunny URL exists (including reused video/short links)
+- Videos / shorts: `transfer_status = uploaded` and `bunny_url` present
+- Playlists: `metadata_status = done` (or `fetched`); items only when playable Bunny URL exists (including reused video/short links)
 
 Incomplete scrape/metadata/transfer rows stay in Postgres but are hidden from these responses.
 

@@ -60,7 +60,7 @@ func (a *API) listMedia(w http.ResponseWriter, r *http.Request, table, idCol, ra
 	where := "creator_row_id = $1"
 	args := []interface{}{creator.ID}
 	if a.Cfg.ReadyOnly {
-		where += " AND transfer_status = 'done' AND bunny_url IS NOT NULL AND bunny_url <> ''"
+		where += " AND transfer_status = 'uploaded' AND bunny_url IS NOT NULL AND bunny_url <> ''"
 	}
 
 	ctx := r.Context()
@@ -125,7 +125,7 @@ func (a *API) ListPlaylists(w http.ResponseWriter, r *http.Request) {
 
 	where := "p.creator_row_id = $1"
 	if a.Cfg.ReadyOnly {
-		where += " AND p.metadata_status = 'done'"
+		where += " AND p.metadata_status IN ('fetched', 'done')"
 	}
 
 	ctx := r.Context()
@@ -150,13 +150,13 @@ SELECT p.id, p.playlist_id, p.youtube_playlist_id, p.url, p.playlist_rank,
            AND (
              (pi.reuse_source = 'video' AND EXISTS (
                 SELECT 1 FROM videos v
-                WHERE v.id = pi.video_row_id AND v.transfer_status = 'done' AND v.bunny_url IS NOT NULL AND v.bunny_url <> ''
+                WHERE v.id = pi.video_row_id AND v.transfer_status = 'uploaded' AND v.bunny_url IS NOT NULL AND v.bunny_url <> ''
              ))
              OR (pi.reuse_source = 'short' AND EXISTS (
                 SELECT 1 FROM shorts s
-                WHERE s.id = pi.short_row_id AND s.transfer_status = 'done' AND s.bunny_url IS NOT NULL AND s.bunny_url <> ''
+                WHERE s.id = pi.short_row_id AND s.transfer_status = 'uploaded' AND s.bunny_url IS NOT NULL AND s.bunny_url <> ''
              ))
-             OR (pi.reuse_source = 'none' AND pi.transfer_status = 'done' AND pi.bunny_url IS NOT NULL AND pi.bunny_url <> '')
+             OR (pi.reuse_source = 'none' AND pi.transfer_status = 'uploaded' AND pi.bunny_url IS NOT NULL AND pi.bunny_url <> '')
            )
        ), 0) AS ready_item_count
 FROM playlists p
@@ -208,7 +208,7 @@ func (a *API) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	where := "p.creator_row_id = $1 AND (p.playlist_id = $2 OR p.youtube_playlist_id = $2)"
 	args := []interface{}{creator.ID, playlistKey}
 	if a.Cfg.ReadyOnly {
-		where += " AND p.metadata_status = 'done'"
+		where += " AND p.metadata_status IN ('fetched', 'done')"
 	}
 
 	var p models.PlaylistDetail
@@ -269,7 +269,7 @@ ORDER BY pi.position ASC, pi.id ASC`
 			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read playlist items")
 			return
 		}
-		ready := transferStatus != nil && *transferStatus == "done" && it.BunnyURL != nil && *it.BunnyURL != ""
+		ready := transferStatus != nil && *transferStatus == "uploaded" && it.BunnyURL != nil && *it.BunnyURL != ""
 		if a.Cfg.ReadyOnly && !ready {
 			continue
 		}
