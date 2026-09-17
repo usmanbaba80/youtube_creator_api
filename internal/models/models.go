@@ -29,6 +29,7 @@ type MediaItem struct {
 	LikeCount        *int64     `json:"like_count,omitempty"`
 	CommentCount     *int64     `json:"comment_count,omitempty"`
 	ThumbnailURL     *string    `json:"thumbnail_url,omitempty"`
+	BunnyThumbnailURL *string   `json:"bunny_thumbnail_url,omitempty"`
 	BunnyURL         *string    `json:"bunny_url,omitempty"`
 	BunnyPath        *string    `json:"bunny_path,omitempty"`
 	UploadedAt       *time.Time `json:"uploaded_at,omitempty"`
@@ -44,6 +45,7 @@ type PlaylistSummary struct {
 	Description        *string   `json:"description,omitempty"`
 	PublishedAt        *string   `json:"published_at,omitempty"`
 	ThumbnailURL       *string   `json:"thumbnail_url,omitempty"`
+	BunnyThumbnailURL  *string   `json:"bunny_thumbnail_url,omitempty"`
 	ItemCount          *int      `json:"item_count,omitempty"`
 	ReadyItemCount     int64     `json:"ready_item_count"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -64,9 +66,10 @@ type PlaylistItem struct {
 	PublishedAt      *string `json:"published_at,omitempty"`
 	DurationISO      *string `json:"duration_iso,omitempty"`
 	DurationSeconds  *int    `json:"duration_seconds,omitempty"`
-	ThumbnailURL     *string `json:"thumbnail_url,omitempty"`
-	BunnyURL         *string `json:"bunny_url,omitempty"`
-	BunnyPath        *string `json:"bunny_path,omitempty"`
-	LinkedVideoID    *string `json:"linked_video_id,omitempty"`
-	LinkedShortID    *string `json:"linked_short_id,omitempty"`
+	ThumbnailURL      *string `json:"thumbnail_url,omitempty"`
+	BunnyThumbnailURL *string `json:"bunny_thumbnail_url,omitempty"`
+	BunnyURL          *string `json:"bunny_url,omitempty"`
+	BunnyPath         *string `json:"bunny_path,omitempty"`
+	LinkedVideoID     *string `json:"linked_video_id,omitempty"`
+	LinkedShortID     *string `json:"linked_short_id,omitempty"`
 }

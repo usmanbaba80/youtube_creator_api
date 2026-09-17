@@ -49,7 +49,18 @@ Incomplete scrape/metadata/transfer rows stay in Postgres but are hidden from th
 All product routes live under `/api/v1/...`.  
 Breaking changes go to `/api/v2/...` without removing v1.
 
-## Deploy (Contabo / Docker)
+## API documentation (PDF)
+
+Generated docs:
+
+- [`docs/YouTube_Creator_API_Documentation.pdf`](docs/YouTube_Creator_API_Documentation.pdf)
+
+Regenerate:
+
+```bat
+pip install reportlab
+python scripts\generate_api_docs_pdf.py
+```
 
 See [DEPLOY.md](DEPLOY.md) for running this API in Docker next to other containers
 (unique compose project, network, and host port `18080`).

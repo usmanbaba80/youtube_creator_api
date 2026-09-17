@@ -79,7 +79,7 @@ func (a *API) listMedia(w http.ResponseWriter, r *http.Request, table, idCol, ra
 	listSQL := `
 SELECT id, ` + idCol + `, youtube_video_id, url, ` + rankCol + `,
        title, description, published_at, duration_iso, duration_seconds,
-       view_count, like_count, comment_count, thumbnail_url,
+       view_count, like_count, comment_count, thumbnail_url, bunny_thumbnail_url,
        bunny_url, bunny_path, uploaded_at
 FROM ` + table + `
 WHERE ` + where + `
@@ -99,7 +99,7 @@ LIMIT $2 OFFSET $3`
 		if err := rows.Scan(
 			&m.ID, &m.PublicID, &m.YouTubeVideoID, &m.URL, &m.Rank,
 			&m.Title, &m.Description, &m.PublishedAt, &m.DurationISO, &m.DurationSeconds,
-			&m.ViewCount, &m.LikeCount, &m.CommentCount, &m.ThumbnailURL,
+			&m.ViewCount, &m.LikeCount, &m.CommentCount, &m.ThumbnailURL, &m.BunnyThumbnailURL,
 			&m.BunnyURL, &m.BunnyPath, &m.UploadedAt,
 		); err != nil {
 			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read records")
@@ -143,7 +143,8 @@ func (a *API) ListPlaylists(w http.ResponseWriter, r *http.Request) {
 
 	listSQL := `
 SELECT p.id, p.playlist_id, p.youtube_playlist_id, p.url, p.playlist_rank,
-       p.title, p.description, p.published_at, p.thumbnail_url, p.item_count, p.created_at,
+       p.title, p.description, p.published_at, p.thumbnail_url, p.bunny_thumbnail_url,
+       p.item_count, p.created_at,
        COALESCE((
          SELECT COUNT(*) FROM playlist_items pi
          WHERE pi.playlist_row_id = p.id
@@ -176,7 +177,8 @@ LIMIT $2 OFFSET $3`
 		var p models.PlaylistSummary
 		if err := rows.Scan(
 			&p.ID, &p.PlaylistID, &p.YouTubePlaylistID, &p.URL, &p.Rank,
-			&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.ItemCount, &p.CreatedAt,
+			&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.BunnyThumbnailURL,
+			&p.ItemCount, &p.CreatedAt,
 			&p.ReadyItemCount,
 		); err != nil {
 			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read playlists")
@@ -214,12 +216,14 @@ func (a *API) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	var p models.PlaylistDetail
 	err = a.DB.QueryRow(ctx, `
 SELECT p.id, p.playlist_id, p.youtube_playlist_id, p.url, p.playlist_rank,
-       p.title, p.description, p.published_at, p.thumbnail_url, p.item_count, p.created_at
+       p.title, p.description, p.published_at, p.thumbnail_url, p.bunny_thumbnail_url,
+       p.item_count, p.created_at
 FROM playlists p
 WHERE `+where+`
 LIMIT 1`, args...).Scan(
 		&p.ID, &p.PlaylistID, &p.YouTubePlaylistID, &p.URL, &p.Rank,
-		&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.ItemCount, &p.CreatedAt,
+		&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.BunnyThumbnailURL,
+		&p.ItemCount, &p.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		response.Fail(w, http.StatusNotFound, "not_found", "playlist not found")
@@ -238,6 +242,7 @@ SELECT pi.position, pi.youtube_video_id, pi.url, pi.reuse_source,
        COALESCE(v.duration_iso, s.duration_iso, pi.duration_iso) AS duration_iso,
        COALESCE(v.duration_seconds, s.duration_seconds, pi.duration_seconds) AS duration_seconds,
        COALESCE(v.thumbnail_url, s.thumbnail_url, pi.thumbnail_url) AS thumbnail_url,
+       COALESCE(v.bunny_thumbnail_url, s.bunny_thumbnail_url, pi.bunny_thumbnail_url) AS bunny_thumbnail_url,
        COALESCE(v.bunny_url, s.bunny_url, pi.bunny_url) AS bunny_url,
        COALESCE(v.bunny_path, s.bunny_path, pi.bunny_path) AS bunny_path,
        v.video_id, s.short_id,
@@ -263,7 +268,8 @@ ORDER BY pi.position ASC, pi.id ASC`
 		if err := rows.Scan(
 			&it.Position, &it.YouTubeVideoID, &it.YouTubeURL, &it.ReuseSource,
 			&it.Title, &it.Description, &it.PublishedAt, &it.DurationISO, &it.DurationSeconds,
-			&it.ThumbnailURL, &it.BunnyURL, &it.BunnyPath, &it.LinkedVideoID, &it.LinkedShortID,
+			&it.ThumbnailURL, &it.BunnyThumbnailURL, &it.BunnyURL, &it.BunnyPath,
+			&it.LinkedVideoID, &it.LinkedShortID,
 			&transferStatus,
 		); err != nil {
 			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read playlist items")
