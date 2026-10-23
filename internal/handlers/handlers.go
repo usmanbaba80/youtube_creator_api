@@ -294,6 +294,185 @@ ORDER BY pi.position ASC, pi.id ASC`
 	response.OK(w, p, nil)
 }
 
+func (a *API) ListPodcasts(w http.ResponseWriter, r *http.Request) {
+	creator, err := a.resolveCreator(r)
+	if err != nil {
+		writeResolveError(w, err)
+		return
+	}
+	page, limit, wantAll := a.pagination(r)
+
+	where := "p.creator_row_id = $1"
+	if a.Cfg.ReadyOnly {
+		where += " AND p.metadata_status IN ('fetched', 'done')"
+	}
+
+	ctx := r.Context()
+	var total int64
+	countSQL := `SELECT COUNT(*) FROM podcasts p WHERE ` + where
+	if err := a.DB.QueryRow(ctx, countSQL, creator.ID).Scan(&total); err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to count podcasts")
+		return
+	}
+
+	page, limit, offset, ok := a.resolvePageWindow(w, page, limit, wantAll, total)
+	if !ok {
+		return
+	}
+
+	listSQL := `
+SELECT p.id, p.podcast_id, p.youtube_podcast_id, p.url, p.podcast_rank,
+       p.title, p.description, p.published_at, p.thumbnail_url, p.bunny_thumbnail_url,
+       p.episode_count, p.created_at,
+       COALESCE((
+         SELECT COUNT(*) FROM podcast_episodes pe
+         WHERE pe.podcast_row_id = p.id
+           AND (
+             (pe.reuse_source = 'video' AND EXISTS (
+                SELECT 1 FROM videos v
+                WHERE v.id = pe.video_row_id AND v.transfer_status = 'uploaded' AND v.bunny_url IS NOT NULL AND v.bunny_url <> ''
+             ))
+             OR (pe.reuse_source = 'short' AND EXISTS (
+                SELECT 1 FROM shorts s
+                WHERE s.id = pe.short_row_id AND s.transfer_status = 'uploaded' AND s.bunny_url IS NOT NULL AND s.bunny_url <> ''
+             ))
+             OR (pe.reuse_source = 'none' AND pe.transfer_status = 'uploaded' AND pe.bunny_url IS NOT NULL AND pe.bunny_url <> '')
+           )
+       ), 0) AS ready_episode_count
+FROM podcasts p
+WHERE ` + where + `
+ORDER BY p.podcast_rank ASC, p.id ASC
+LIMIT $2 OFFSET $3`
+
+	rows, err := a.DB.Query(ctx, listSQL, creator.ID, limit, offset)
+	if err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to load podcasts")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]models.PodcastSummary, 0)
+	for rows.Next() {
+		var p models.PodcastSummary
+		if err := rows.Scan(
+			&p.ID, &p.PodcastID, &p.YouTubePodcastID, &p.URL, &p.Rank,
+			&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.BunnyThumbnailURL,
+			&p.EpisodeCount, &p.CreatedAt,
+			&p.ReadyEpisodeCount,
+		); err != nil {
+			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read podcasts")
+			return
+		}
+		items = append(items, p)
+	}
+	if err := rows.Err(); err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to load podcasts")
+		return
+	}
+
+	response.OK(w, items, pageMeta(page, limit, total, wantAll))
+}
+
+func (a *API) GetPodcast(w http.ResponseWriter, r *http.Request) {
+	creator, err := a.resolveCreator(r)
+	if err != nil {
+		writeResolveError(w, err)
+		return
+	}
+	podcastKey := strings.TrimSpace(chi.URLParam(r, "podcastId"))
+	if podcastKey == "" {
+		response.Fail(w, http.StatusBadRequest, "bad_request", "podcastId is required")
+		return
+	}
+
+	ctx := r.Context()
+	where := "p.creator_row_id = $1 AND (p.podcast_id = $2 OR p.youtube_podcast_id = $2)"
+	args := []interface{}{creator.ID, podcastKey}
+	if a.Cfg.ReadyOnly {
+		where += " AND p.metadata_status IN ('fetched', 'done')"
+	}
+
+	var p models.PodcastDetail
+	err = a.DB.QueryRow(ctx, `
+SELECT p.id, p.podcast_id, p.youtube_podcast_id, p.url, p.podcast_rank,
+       p.title, p.description, p.published_at, p.thumbnail_url, p.bunny_thumbnail_url,
+       p.episode_count, p.created_at
+FROM podcasts p
+WHERE `+where+`
+LIMIT 1`, args...).Scan(
+		&p.ID, &p.PodcastID, &p.YouTubePodcastID, &p.URL, &p.Rank,
+		&p.Title, &p.Description, &p.PublishedAt, &p.ThumbnailURL, &p.BunnyThumbnailURL,
+		&p.EpisodeCount, &p.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		response.Fail(w, http.StatusNotFound, "not_found", "podcast not found")
+		return
+	}
+	if err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to load podcast")
+		return
+	}
+
+	itemSQL := `
+SELECT pe.position, pe.youtube_video_id, pe.url, pe.reuse_source,
+       COALESCE(v.title, s.title, pe.title) AS title,
+       COALESCE(v.description, s.description, pe.description) AS description,
+       COALESCE(v.published_at, s.published_at, pe.published_at) AS published_at,
+       COALESCE(v.duration_iso, s.duration_iso, pe.duration_iso) AS duration_iso,
+       COALESCE(v.duration_seconds, s.duration_seconds, pe.duration_seconds) AS duration_seconds,
+       COALESCE(v.thumbnail_url, s.thumbnail_url, pe.thumbnail_url) AS thumbnail_url,
+       COALESCE(v.bunny_thumbnail_url, s.bunny_thumbnail_url, pe.bunny_thumbnail_url) AS bunny_thumbnail_url,
+       COALESCE(v.bunny_url, s.bunny_url, pe.bunny_url) AS bunny_url,
+       COALESCE(v.bunny_path, s.bunny_path, pe.bunny_path) AS bunny_path,
+       v.video_id, s.short_id,
+       COALESCE(v.transfer_status, s.transfer_status, pe.transfer_status) AS effective_transfer_status
+FROM podcast_episodes pe
+LEFT JOIN videos v ON v.id = pe.video_row_id
+LEFT JOIN shorts s ON s.id = pe.short_row_id
+WHERE pe.podcast_row_id = $1
+ORDER BY pe.position ASC, pe.id ASC`
+
+	rows, err := a.DB.Query(ctx, itemSQL, p.ID)
+	if err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to load podcast episodes")
+		return
+	}
+	defer rows.Close()
+
+	episodes := make([]models.PlaylistItem, 0)
+	var readyCount int64
+	for rows.Next() {
+		var it models.PlaylistItem
+		var transferStatus *string
+		if err := rows.Scan(
+			&it.Position, &it.YouTubeVideoID, &it.YouTubeURL, &it.ReuseSource,
+			&it.Title, &it.Description, &it.PublishedAt, &it.DurationISO, &it.DurationSeconds,
+			&it.ThumbnailURL, &it.BunnyThumbnailURL, &it.BunnyURL, &it.BunnyPath,
+			&it.LinkedVideoID, &it.LinkedShortID,
+			&transferStatus,
+		); err != nil {
+			response.Fail(w, http.StatusInternalServerError, "scan_failed", "failed to read podcast episodes")
+			return
+		}
+		ready := transferStatus != nil && *transferStatus == "uploaded" && it.BunnyURL != nil && *it.BunnyURL != ""
+		if a.Cfg.ReadyOnly && !ready {
+			continue
+		}
+		if ready {
+			readyCount++
+		}
+		episodes = append(episodes, it)
+	}
+	if err := rows.Err(); err != nil {
+		response.Fail(w, http.StatusInternalServerError, "query_failed", "failed to load podcast episodes")
+		return
+	}
+
+	p.Episodes = episodes
+	p.ReadyEpisodeCount = readyCount
+	response.OK(w, p, nil)
+}
+
 type resolveError struct {
 	status  int
 	code    string

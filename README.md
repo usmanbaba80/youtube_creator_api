@@ -1,7 +1,7 @@
 # YouTube Creator API
 
 Separate Go backend that reads the **same Postgres database** filled by the YouTube scraper.
-It exposes versioned, API-key-protected GET endpoints for a creator's ready videos, shorts, and playlists.
+It exposes versioned, API-key-protected GET endpoints for a creator's ready videos, shorts, playlists, and podcasts.
 
 This project is intentionally **not** inside the scraper repo.
 
@@ -16,6 +16,8 @@ This project is intentionally **not** inside the scraper repo.
 | `GET /api/v1/creators/{creatorId}/shorts` | Shorts |
 | `GET /api/v1/creators/{creatorId}/playlists` | Playlist list |
 | `GET /api/v1/creators/{creatorId}/playlists/{playlistId}` | Playlist + ready items |
+| `GET /api/v1/creators/{creatorId}/podcasts` | Podcast list |
+| `GET /api/v1/creators/{creatorId}/podcasts/{podcastId}` | Podcast + ready episodes |
 
 Why separate:
 - Different pagination and payload shapes (playlists nest items)
@@ -31,6 +33,7 @@ By default (`READY_ONLY=true`) APIs only return content that is ready for client
 
 - Videos / shorts: `transfer_status = uploaded` and `bunny_url` present
 - Playlists: `metadata_status = done` (or `fetched`); items only when playable Bunny URL exists (including reused video/short links)
+- Podcasts: same rule as playlists; `podcastId` may be the business id (`D...`) or the YouTube playlist id
 
 Incomplete scrape/metadata/transfer rows stay in Postgres but are hidden from these responses.
 
@@ -98,6 +101,10 @@ curl -H "X-API-Key: change-me-long-random-key" "http://localhost:8080/api/v1/cre
 curl -H "X-API-Key: change-me-long-random-key" http://localhost:8080/api/v1/creators/100/playlists
 
 curl -H "X-API-Key: change-me-long-random-key" http://localhost:8080/api/v1/creators/100/playlists/P110001
+
+curl -H "X-API-Key: change-me-long-random-key" "http://localhost:8080/api/v1/creators/5103/podcasts?limit=all"
+
+curl -H "X-API-Key: change-me-long-random-key" http://localhost:8080/api/v1/creators/5103/podcasts/D5510301
 ```
 
 ## Response shape

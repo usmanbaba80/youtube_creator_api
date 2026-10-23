@@ -63,6 +63,8 @@ func main() {
 				r.Get("/shorts", api.ListShorts)
 				r.Get("/playlists", api.ListPlaylists)
 				r.Get("/playlists/{playlistId}", api.GetPlaylist)
+				r.Get("/podcasts", api.ListPodcasts)
+				r.Get("/podcasts/{podcastId}", api.GetPodcast)
 			})
 		})
 	})
